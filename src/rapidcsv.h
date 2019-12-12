@@ -10,6 +10,13 @@
  * rapidcsv is distributed under the BSD 3-Clause license, see LICENSE for details.
  *
  */
+/*
+ *
+ * Fix syntax about quotes to be consistent with Microsoft Excel
+ * modify by daixi(fingermelody@foxmail.com)
+ * 2019-12-12
+ *
+ */
 
 #pragma once
 
@@ -1233,6 +1240,35 @@ namespace rapidcsv
       }
     }
 
+    // add by daixi(fingermelody @foxmail.com) 2019-12-12
+    std::string& ReadCell(std::string& cell)
+    {
+        if(cell.length() < 2) return cell;
+
+        size_t in  = 0;
+        size_t out = 0;
+        size_t end = cell.length();
+        // 去掉首尾引号
+        if((cell.front() == '\"') && cell.back() == '\"') {
+            in++;
+            end--;
+        }
+
+        // 去掉连续引号
+        for(; in < end; ++in) {
+            if(cell[in] == '\"') {
+                size_t next = in + 1;
+                if((next < end) && (cell[next] == '\"')) {
+                    ++in;
+                }
+            }
+            cell[out] = cell[in];
+            ++out;
+        }
+        cell.resize(out);
+        return cell;
+    }
+
     void ReadCsv(std::istream& pStream)
     {
       pStream.seekg(0, std::ios::end);
@@ -1264,6 +1300,7 @@ namespace rapidcsv
           {
             if (!quoted)
             {
+              ReadCell(cell);
               row.push_back(mSeparatorParams.mTrim ? Trim(cell) : cell);
               cell.clear();
             }
@@ -1279,6 +1316,7 @@ namespace rapidcsv
           else if (buffer[i] == '\n')
           {
             ++lf;
+            ReadCell(cell);
             row.push_back(mSeparatorParams.mTrim ? Trim(cell) : cell);
             cell.clear();
             mData.push_back(row);
@@ -1296,6 +1334,7 @@ namespace rapidcsv
       // Handle last line without linebreak
       if (!cell.empty() || !row.empty())
       {
+        ReadCell(cell);
         row.push_back(mSeparatorParams.mTrim ? Trim(cell) : cell);
         cell.clear();
         mData.push_back(row);
@@ -1368,21 +1407,42 @@ namespace rapidcsv
       }
     }
 
+    // add by daixi(fingermelody @foxmail.com) 2019-12-12
+    void WriteCell(std::ostream& pStream, const std::string& cell) const
+    {
+        if(cell.empty()) return;
+
+        bool quoted = false;
+        for(size_t i = 0; i < cell.length(); i++) {
+            if((cell[i] == mSeparatorParams.mSeparator) || (cell[i] == '\"')) {
+                quoted = true;
+                break;
+            }
+        }
+        if(!quoted) {
+            pStream << cell;
+            return;
+        }
+
+        // 添加引号
+        pStream << "\"";
+        for(size_t i = 0; i < cell.length(); i++) {
+            pStream << cell[i];
+            if(cell[i] == '\"') {
+                pStream << "\"";
+            }
+        }
+        pStream << "\"";
+        return;
+    }
+
     void WriteCsv(std::ostream& pStream) const
     {
       for (auto itr = mData.begin(); itr != mData.end(); ++itr)
       {
         for (auto itc = itr->begin(); itc != itr->end(); ++itc)
         {
-          if ((std::string::npos == itc->find(mSeparatorParams.mSeparator)) ||
-              ((itc->length() >= 2) && ((*itc)[0] == '\"') && ((*itc)[itc->length() - 1] == '\"')))
-          {
-            pStream << *itc;
-          }
-          else
-          {
-            pStream << '"' << *itc << '"';
-          }
+          WriteCell(pStream, *itc);  // modify by daixi(fingermelody @foxmail.com) 2019-12-12
 
           if (std::distance(itc, itr->end()) > 1)
           {
